@@ -9,3 +9,5 @@
 #include <netdb.h>
 #include <string.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <signal.h>

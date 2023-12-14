@@ -29,3 +29,10 @@ typedef enum QClass {
     IN  = 1,    // internet
     ALLCLASSES = 255   // any class
 } QClass;
+
+typedef struct QuestionInfo {
+    int questionCategory;
+    char domainName[MAX_NAME_SIZE];
+    enum QType qType;
+    enum QClass qClass;
+} QuestionInfo;

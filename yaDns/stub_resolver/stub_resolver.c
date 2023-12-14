@@ -7,14 +7,9 @@
                                 // qType (2 byte integer)   + " " +
                                 // qClass (2 byte integer)  + "\0" 
 
-typedef struct QuestionInfo {
-    int questionCategory;
-    char domainName[MAX_NAME_SIZE];
-    enum QType qType;
-    enum QClass qClass;
-} QuestionInfo;
+struct sentQuestionInfo;
 
-// Recognising recursive resolver
+// Recognising recursive resolver 
 int readResolverConfig(char* ipV4, int* port);
 
 extern int errno;
@@ -22,53 +17,54 @@ extern int errno;
 
 int main() {
     int recursiveResolverPort;
-    char recursiveResovlerAdress[MAX_IP_BUFFER_SIZE];
-    (void) readResolverConfig(recursiveResovlerAdress, &recursiveResolverPort);
+    char recursiveResolverAdress[MAX_IP_BUFFER_SIZE];
+    (void) readResolverConfig(recursiveResolverAdress, &recursiveResolverPort);
 
     int socketDescriptor;
-    struct sockaddr_in recursiveResovler;
+    struct sockaddr_in recursiveResolver;
     int recursiveResolverLength;
     char question[MAX_QUESTION_SIZE];
     int questionLength = 0;
-    QuestionInfo questionInfo;
-    bzero(&questionInfo, sizeof(questionInfo));
+    struct QuestionInfo sentQuestionInfo;
+    bzero(&sentQuestionInfo, sizeof(sentQuestionInfo));
     char answer[MAX_MESSAGE_SIZE];
 
     if ((socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("StubResolver> Error: Could not create socket!\n");
+        perror("StubResolver> Error: Could not create socket\n");
         return errno;
     }
 
-    recursiveResovler.sin_family = AF_INET;
-    recursiveResovler.sin_addr.s_addr = inet_addr(recursiveResovlerAdress);
-    recursiveResovler.sin_port = htons(recursiveResolverPort);
+    recursiveResolver.sin_family = AF_INET;
+    recursiveResolver.sin_addr.s_addr = inet_addr(recursiveResolverAdress);
+    recursiveResolver.sin_port = htons(recursiveResolverPort);
 
     // readQuestion(question, &questionLength);
-    // parseQuestion(&questionInfo, question, questionLength);
+    // parseQuestion(&sentQuestionInfo, question, questionLength);
 
-    recursiveResolverLength = sizeof(recursiveResovler);
+    recursiveResolverLength = sizeof(recursiveResolver);
 
-    if (sendto(socketDescriptor, &questionInfo, sizeof(questionInfo), 0, (struct sockaddr*) &recursiveResovler, recursiveResolverLength) < 0) {
-        perror("StubResolver> Error: Could not send question to resolver!\n");
+    if (sendto(socketDescriptor, &sentQuestionInfo, sizeof(sentQuestionInfo), 0, (struct sockaddr*) &recursiveResolver, recursiveResolverLength) < 0) {
+        perror("StubResolver> Error: Could not send question to resolver\n");
         return errno;
     }
 
-    if ((recvfrom(socketDescriptor, answer, MAX_MESSAGE_SIZE, 0, (struct sockaddr*)&recursiveResovler, &recursiveResolverLength)) < 0) {
+    if ((recvfrom(socketDescriptor, answer, MAX_MESSAGE_SIZE, 0, (struct sockaddr*)&recursiveResolver, &recursiveResolverLength)) < 0) {
         perror("StubResolver> Error: Could not get answer from resolver");
         return errno;
     }
+    printf("%s", answer);
     return 0;
 }
 
 int readResolverConfig(char* ipV4, int* port) {
     int configFd;
     if ((configFd = open("stub_resolver_config.csv", O_RDONLY)) < 0) {
-        perror("StubResolver> Error: Could not open in read-only config file!\n");
+        perror("StubResolver> Error: Could not open in read-only config file\n");
         return errno;
     }
     char configBuffer[MAX_CONFIG_BUFFER];
     if ((read(configFd, configBuffer, MAX_CONFIG_BUFFER)) < 0) {
-        perror("StubResolver> Error: Could not read from config file!\n");
+        perror("StubResolver> Error: Could not read from config file\n");
         return errno;
     }
     char* token = strtok(configBuffer, ",");
