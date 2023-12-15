@@ -3,43 +3,84 @@
 
 #define PORT 7710
 #define MAX_WORKERS 8
+#define MAX_QUEUE_ENTRIES 1024
 #define DEBUG
-
-extern int errno;
-
-struct QuestionInfo;
 
 pthread_mutex_t mutexQuestionsQueue;
 pthread_cond_t condQuestionsQueue;
 pthread_t workers[MAX_WORKERS];
 
 typedef struct ResolveQuestion {
-    void (*resolverFunction) (int, QuestionInfo, struct sockaddr_in);
+    void (*resolverFunction) (int, char[], struct sockaddr_in);
     int socketDescriptor;
-    QuestionInfo recievedQuestion;
+    char recievedQuestion[MAX_MESSAGE_SIZE];
     struct sockaddr_in questionSender;
 } ResolveQuestion;
 
-ResolveQuestion questionsQueue[1024];
+ResolveQuestion questionsQueue[MAX_QUEUE_ENTRIES];
 int questionsCount;
 
-void resolveQuestion(int socketDescriptor, QuestionInfo recievedQuestion, struct sockaddr_in questionSender) {
-    char answer[MAX_MESSAGE_SIZE];
-    bzero(answer, MAX_MESSAGE_SIZE);
+void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct sockaddr_in questionSender) {
+    /**
+     *  Message queryMessage;
+     *  Message responseMessage;
+     *  
+     *  bzero(&queryMessage, sizeof(Message));
+     *  bzero(&responseMessage, sizeof(Message));
+     */
+
     #ifdef DEBUG
     printf("Resolver> Recieved question...\n");
-    strcpy(answer, "it works :P\n");
     #endif
     /**
      *  todo!()
      *  Format the question into a standard query
-     *  Open new socket to send query to Foreign Server
+     *  Check cache to see if query was already resolved
+     *  formatQuestionIntoQuery(QuestionInfo* question, Message* query);
+     */
+
+    // Dummy code to send a querryMessage to a foreign server
+    /*
+    int socketDescriptorR_NS;
+    struct sockaddr_in foreignServer;
+    if ((socketDescriptorR_NS = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Resolver> Error: Could not create socket to foreign server\n");
+        exit(1);
+    }
+    foreignServer.sin_family = AF_INET;
+    foreignServer.sin_addr.s_addr = inet_addr("127.0.0.1");
+    foreignServer.sin_port = htons(7100);
+    unsigned int lengthForeignServer = sizeof(foreignServer);
+    char formatedQuery[MAX_MESSAGE_SIZE];
+    char response[MAX_MESSAGE_SIZE];
+    strcpy(formatedQuery, recievedQuestion);
+    strcat(formatedQuery, " Seen by Resolver ");
+    if (sendto(socketDescriptorR_NS, formatedQuery, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, lengthForeignServer) <= 0) {
+        perror("Resolver> Error: Could not send message to foreign server\n");
+        exit(1);
+    }
+    if ((recvfrom(socketDescriptorR_NS, response, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, &lengthForeignServer)) < 0) {
+        perror("Resolver> Error: Could not recieve message from foreign server\n");
+        exit(1);
+    }
+    close(socketDescriptorR_NS);
+    // end of dummy code
+    */
+    /**
+     *  todo!()
      *  Based on the answer either return it to the question sender or open new socket to the appropiate server (recursive search)
      */
     #ifdef DEBUG
     printf("Resolver> Sending back answer...\n");
     #endif
-    if (sendto(socketDescriptor, answer, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &questionSender, sizeof(struct sockaddr)) <= 0) {
+    /**
+     * todo!()
+     * Format response from foreign server into a easy to read string
+    */
+    char response[MAX_MESSAGE_SIZE];
+    strcpy(response, recievedQuestion);
+    strcat(response, " Seen by Resolver\n");
+    if (sendto(socketDescriptorS_R, response, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &questionSender, sizeof(struct sockaddr)) <= 0) {
         perror("Resolver> Error: Could not send answer back to sender\n");
         exit(1);
     }
@@ -82,7 +123,7 @@ void* startWorker() {
 int main() {
     struct sockaddr_in resolver;
     struct sockaddr_in stubResolver;
-    QuestionInfo recievedQuestion;
+    char recievedQuestion[MAX_MESSAGE_SIZE];
     int socketDescriptor;
     pthread_mutex_init(&mutexQuestionsQueue, NULL);
     pthread_cond_init(&condQuestionsQueue, NULL);
@@ -90,13 +131,13 @@ int main() {
     for (int i = 0; i < MAX_WORKERS; ++i) {
         if (pthread_create(&workers[i], NULL, &startWorker, NULL) < 0) {
             perror("Resolver> Error: Could not create workers\n");
-            return errno;
+            exit(1);
         }
     }
 
     if ((socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("Resolver> Error: Could not create socket\n");
-        return errno;
+        exit(1);
     }
 
     bzero(&resolver, sizeof(resolver));
@@ -108,7 +149,7 @@ int main() {
 
     if (bind(socketDescriptor, (struct sockaddr*) &resolver, sizeof(struct sockaddr)) == -1) {
         perror("Resolver> Error: Could not bind socket\n");
-        return errno;
+        exit(1);
     }
 
     for (;;) {
@@ -117,22 +158,25 @@ int main() {
 
         if ((recvfrom(socketDescriptor, &recievedQuestion, sizeof(QuestionInfo), 0, (struct sockaddr*) &stubResolver, &stubResolverSize)) <= 0 ) {
             perror("Resolver> Error: Could not recieve question from stub resolver\n");
-            return errno;
+            exit(1);
         }
         ResolveQuestion questionToBeResolved;
-        memcpy(&(questionToBeResolved.recievedQuestion), &recievedQuestion, sizeof(QuestionInfo));
+        strcpy(questionToBeResolved.recievedQuestion, recievedQuestion);
         memcpy(&(questionToBeResolved.questionSender), &stubResolver, sizeof(struct sockaddr_in));
         questionToBeResolved.socketDescriptor = socketDescriptor;
         questionToBeResolved.resolverFunction = &resolveQuestion;
         submitQuestion(questionToBeResolved);
     }
-    /*
-    for (int i = 0; i < MAX_WORKERS; ++i) {
-        pthread_join(workers[i], NULL);
-    }
-    pthread_mutex_destroy(&mutexQuestionsQueue);
-    pthread_cond_destroy(&condQuestionsQueue);
-    close(socketDescriptor);
+
+    /**
+     * Cleanup code (to be used :P)
+     * 
+     * for (int i = 0; i < MAX_WORKERS; ++i) {
+     *     pthread_join(workers[i], NULL);
+     * }
+     * pthread_mutex_destroy(&mutexQuestionsQueue);
+     * pthread_cond_destroy(&condQuestionsQueue);
+     * close(socketDescriptor);
     */
     return 0;
 }

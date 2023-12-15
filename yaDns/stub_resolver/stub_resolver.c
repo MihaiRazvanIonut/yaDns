@@ -7,13 +7,8 @@
                                 // qType (2 byte integer)   + " " +
                                 // qClass (2 byte integer)  + "\0" 
 
-struct sentQuestionInfo;
-
 // Recognising recursive resolver 
-int readResolverConfig(char* ipV4, int* port);
-
-extern int errno;
-
+void readResolverConfig(char* ipV4, int* port);
 
 int main() {
     int recursiveResolverPort;
@@ -39,11 +34,11 @@ int main() {
     recursiveResolver.sin_port = htons(recursiveResolverPort);
 
     // readQuestion(question, &questionLength);
-    // parseQuestion(&sentQuestionInfo, question, questionLength);
+    read(0, question, MAX_QUESTION_SIZE);
 
     recursiveResolverLength = sizeof(recursiveResolver);
 
-    if (sendto(socketDescriptor, &sentQuestionInfo, sizeof(sentQuestionInfo), 0, (struct sockaddr*) &recursiveResolver, recursiveResolverLength) < 0) {
+    if (sendto(socketDescriptor, question, MAX_QUESTION_SIZE, 0, (struct sockaddr*) &recursiveResolver, recursiveResolverLength) < 0) {
         perror("StubResolver> Error: Could not send question to resolver\n");
         return errno;
     }
@@ -56,16 +51,16 @@ int main() {
     return 0;
 }
 
-int readResolverConfig(char* ipV4, int* port) {
+void readResolverConfig(char* ipV4, int* port) {
     int configFd;
     if ((configFd = open("stub_resolver_config.csv", O_RDONLY)) < 0) {
         perror("StubResolver> Error: Could not open in read-only config file\n");
-        return errno;
+        exit(1);
     }
     char configBuffer[MAX_CONFIG_BUFFER];
     if ((read(configFd, configBuffer, MAX_CONFIG_BUFFER)) < 0) {
         perror("StubResolver> Error: Could not read from config file\n");
-        return errno;
+        exit(1);
     }
     char* token = strtok(configBuffer, ",");
     strcpy(ipV4, token);

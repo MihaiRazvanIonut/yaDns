@@ -30,9 +30,46 @@ typedef enum QClass {
     ALLCLASSES = 255   // any class
 } QClass;
 
+typedef struct ResourceRecord {
+    char domainName[MAX_NAME_SIZE];
+    QType rrType;
+    QClass rrClass; // Class always set to 1
+    int timeToLive;
+    char* rData;
+    unsigned short int rdLength;
+} ResourceRecord;
+
 typedef struct QuestionInfo {
     int questionCategory;
     char domainName[MAX_NAME_SIZE];
     enum QType qType;
     enum QClass qClass;
 } QuestionInfo;
+
+typedef struct MessageHeader {
+    unsigned short id;
+    /**
+     * This member is responsible for a bunch of message flags
+     * QR 	    Query Response 1 bit: 0 for queries, 1 for responses.
+     * OPCODE 	Operation Code 4 bits: Typically always 0, see RFC1035 for details.
+     * AA 	    Authoritative Answer 1 bit: Set to 1 if the responding server is authoritative.
+     * TC 	    Truncated Message 1 bit: Set to 1 if the message length exceeds 512 bytes.
+     * RD 	    Recursion Desired 1 bit: Set by the sender of the request if the server should attempt to resolve the query recursively if it does not have an answer readily available.
+     * RA 	    Recursion Available 1 bit: Set by the server to indicate whether or not recursive queries are allowed.
+     * Z 	    Reserved 3 bits: Originally reserved for later use, but now used for DNSSEC queries.
+     * RCODE 	Response Code 4 bits: Set by the server to indicate the status of the response, i.e. whether or not it was successful or failed
+     */
+    unsigned short queryInfo;
+    unsigned short qdCount;
+    unsigned short anCount;
+    unsigned short nsCount;
+    unsigned short arCount;
+} MessageHeader;
+
+typedef struct Message {
+    MessageHeader header;
+    char* questionsList;
+    ResourceRecord* answersList;
+    ResourceRecord* authorityList;
+    ResourceRecord* additionalsList;
+} Message;
