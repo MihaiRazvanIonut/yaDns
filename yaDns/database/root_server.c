@@ -26,7 +26,8 @@ void computeQuery(int socketDescriptorR_NS, char recievedQuery[], struct sockadd
     char response[MAX_MESSAGE_SIZE];
     bzero(&response, MAX_MESSAGE_SIZE);
     strcpy(response, recievedQuery);
-    strcat(response, " Seen by Root Server\n");
+    strcat(response, ":Seen by Root Server:");
+    printf("Recieved query %s\n", recievedQuery);
     if (sendto(socketDescriptorR_NS, response, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &querySender, sizeof(struct sockaddr)) < 0) {
         perror("Root> Could not send response to requester\n");
         exit(0);
@@ -57,7 +58,7 @@ void* startWorker() {
             querriesQueue[i] = querriesQueue[i + 1];
         }
         --querriesCount;
-        pthread_mutex_lock(&mutexQueriesQueue);
+        pthread_mutex_unlock(&mutexQueriesQueue);
         executeComputeQuery(&query);
     }
     return NULL;

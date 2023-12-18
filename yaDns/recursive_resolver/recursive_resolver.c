@@ -40,7 +40,6 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
      */
 
     // Dummy code to send a querryMessage to a foreign server
-    /*
     int socketDescriptorR_NS;
     struct sockaddr_in foreignServer;
     if ((socketDescriptorR_NS = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -54,7 +53,7 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
     char formatedQuery[MAX_MESSAGE_SIZE];
     char response[MAX_MESSAGE_SIZE];
     strcpy(formatedQuery, recievedQuestion);
-    strcat(formatedQuery, " Seen by Resolver ");
+    strcat(formatedQuery, ":Seen by Resolver:");
     if (sendto(socketDescriptorR_NS, formatedQuery, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, lengthForeignServer) <= 0) {
         perror("Resolver> Error: Could not send message to foreign server\n");
         exit(1);
@@ -65,7 +64,7 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
     }
     close(socketDescriptorR_NS);
     // end of dummy code
-    */
+
     /**
      *  todo!()
      *  Based on the answer either return it to the question sender or open new socket to the appropiate server (recursive search)
@@ -77,9 +76,6 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
      * todo!()
      * Format response from foreign server into a easy to read string
     */
-    char response[MAX_MESSAGE_SIZE];
-    strcpy(response, recievedQuestion);
-    strcat(response, " Seen by Resolver\n");
     if (sendto(socketDescriptorS_R, response, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &questionSender, sizeof(struct sockaddr)) <= 0) {
         perror("Resolver> Error: Could not send answer back to sender\n");
         exit(1);

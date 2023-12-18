@@ -37,7 +37,7 @@ int main() {
     read(0, question, MAX_QUESTION_SIZE);
 
     recursiveResolverLength = sizeof(recursiveResolver);
-
+    question[strlen(question) - 1] = '\0';
     if (sendto(socketDescriptor, question, MAX_QUESTION_SIZE, 0, (struct sockaddr*) &recursiveResolver, recursiveResolverLength) < 0) {
         perror("StubResolver> Error: Could not send question to resolver\n");
         return errno;
