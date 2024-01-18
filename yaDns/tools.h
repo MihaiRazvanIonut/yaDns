@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <ctype.h>
 #include "protocol/dns_protocol.h"
+#include <time.h>
 
 // for debug purposes
 void printMessage(Message* message) {

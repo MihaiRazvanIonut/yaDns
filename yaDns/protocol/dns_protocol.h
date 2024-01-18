@@ -6,13 +6,14 @@
 #define DNS_PROTOCOL_HH
 
 #include <stdbool.h>
+#include <stdio.h>
 #define MAX_LABEL_SIZE 64       // octets ( 63 chars + '\0')
 #define MAX_NAME_SIZE 256       // octets (255 chars + '\0')
 #define MAX_MESSAGE_SIZE 512    // octets 
 #define MAX_QUESTION_SIZE 268   // domain name (255 octets) + " " +
                                 // qType (2 byte integer)   + " " +
                                 // qClass (2 byte integer)  + "\0" 
-
+#define MAX_ANSWER_SIZE 5
 /**
  *  TTL      - 32 bit signed integer
  *  RDlength - unsigned 16 bit integer
@@ -53,25 +54,29 @@ typedef struct QuestionInfo {
 } QuestionInfo;
 
 typedef struct MessageHeader {
+    unsigned short id;
     bool qr;
     bool aa;
     bool tc;
     bool rd;
     bool ra;
     unsigned short rcode;
-    unsigned short qdCount;
     unsigned short anCount;
-    unsigned short nsCount;
-    unsigned short arCount;
 } MessageHeader;
 
 typedef struct Message {
     MessageHeader header;
     char questionDomain[MAX_NAME_SIZE];
     QType questionQType;
-    ResourceRecord* answersList;
-    ResourceRecord* authorityList;
-    ResourceRecord* additionalsList;
+    ResourceRecord answersList[MAX_ANSWER_SIZE];
 } Message;
+
+
+void printResourceRecord(const ResourceRecord* rr) {
+    printf("Domain Name: %s\n", rr -> domainName);
+    printf("Class: %d\n", rr -> rrClass);
+    printf("Query Type: %d\n", rr -> rrClass);
+    printf("Resource Data: %s\n", rr -> rData);
+}
 
 #endif

@@ -1,6 +1,0 @@
-#ifndef QUERY_RESOLUTION_HH
-#define QUERY_RESOLUTION_HH
-
-
-
-#endif

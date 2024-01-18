@@ -123,6 +123,8 @@ void* startWorker() {
 
 int main() {
     loadNameServerList();
+    time_t t;
+    srand((unsigned)time(&t));
     struct sockaddr_in resolver;
     struct sockaddr_in stubResolver;
     char recievedQuestion[MAX_QUESTION_SIZE];
@@ -183,25 +185,20 @@ void loadNameServerList() {
 }
 
 int get_appropiate_port(char domainName[MAX_NAME_SIZE]) {
+    char domainNameCopy[MAX_NAME_SIZE];
+    strcpy(domainNameCopy, domainName);
+    int domainNameLen = strlen(domainName);
     for (int i = 0; i < SLIST_SIZE; ++i) {
-        char* nocase_dn = strlwr(sList[i].domainName, strlen(sList[i].domainName) + 1);
-        if (strstr(domainName, nocase_dn)) {
-            free(nocase_dn);
+        for (int j = 0; j < domainNameLen; ++j) {
+            domainNameCopy[j] = toupper(domainNameCopy[j]);
+        }        
+        if (strstr(domainNameCopy, sList[i].domainName)) {
             return sList[i].port;
         }
-        free(nocase_dn);
     }
     return -1;
 }
 
-char* strlwr(char* str, int len) {
-    char* lower_str = (char*) malloc(len);
-    for (int i = 0; i < len; ++i) {
-        lower_str[i] = tolower(str[i]);
-    }
-    lower_str[len] = '\0';
-    return lower_str;
-}
 
 QType parse_recieved_question(char question[MAX_QUESTION_SIZE], char domainName[MAX_NAME_SIZE]) {
     char *tokenizer = strtok(question, " ");
@@ -225,22 +222,16 @@ QType parse_recieved_question(char question[MAX_QUESTION_SIZE], char domainName[
 }
 
 void formatQuestionIntoQuery(char domainName[MAX_NAME_SIZE], QType qType, Message* query) {
+    query -> header.id = rand() % 65535 + 1; 
     query -> header.qr = true;
     query -> header.aa = false;
     query -> header.tc = false;
     query -> header.rd = false;
     query -> header.ra = false;
     query -> header.rcode = 0;
-    query -> header.qdCount = 1;
     query -> header.anCount = 0;
-    query -> header.nsCount = 0;
-    query -> header.arCount = 0;
     strcpy(query -> questionDomain, domainName);
     query -> questionQType = qType;
-    query -> answersList = NULL;
-    query -> authorityList = NULL;
-    query -> additionalsList = NULL;
-    return query;
 }
 int checkCache(Message*) {
     return -1;
