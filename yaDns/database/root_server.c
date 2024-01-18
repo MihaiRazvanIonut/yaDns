@@ -27,25 +27,10 @@ int querriesCount;
 void computeQuery(int socketDescriptorR_NS, Message recievedQuery, struct sockaddr_in querySender) {
     Message response;
     (void) getResponse(&recievedQuery, &response);
-    printf("Response id: #%d\n", response.header.id);
-    printf("Header: qr:%d aa: %d tc: %d rd: %d ra: %d Answers: %d\n",
-            response.header.qr,
-            response.header.aa,
-            response.header.tc,
-            response.header.rd,
-            response.header.ra,
-            response.header.anCount       
-    );
-    for (int i = 0; i < response.header.anCount; ++i) {
-        printf("\n");
-        printResourceRecord(&response.answersList[i]);
-    }
-    // Dummy code to test functionality
     if (sendto(socketDescriptorR_NS, &response, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &querySender, sizeof(struct sockaddr)) < 0) {
         perror("Foreign Server> Could not send response to requester\n");
         exit(0);
     }
-    // end of dummy code
 }
 
 void executeComputeQuery(ComputeQuery* query) {
@@ -171,17 +156,17 @@ void getResponse(Message* query, Message* response) {
                                 response -> header.tc = true;
                             } else {
                                 int lenData = strlen(bufferLines + index);
-                                char* data = (char*) malloc(lenData + 1);
+                                char data[MAX_RRDATA];
                                 data[lenData] = '\0';
                                 for (int i = 0; bufferLines[index]; ++index, ++i) {
                                     data[i] = bufferLines[index];
                                 }
                                 unsigned short indexAnswerList = response -> header.anCount;
-                                strcpy(response -> answersList[indexAnswerList].domainName, query -> questionDomain);
+                                strcpy(response -> questionDomain, query -> questionDomain);
                                 response -> answersList[indexAnswerList].rrClass = IN;
                                 response -> answersList[indexAnswerList].rrType = A;
                                 response -> answersList[indexAnswerList].rdLength = lenData;
-                                response -> answersList[indexAnswerList].rData = data;
+                                strcpy(response -> answersList[indexAnswerList].rData, data);
                                 response -> header.anCount++;
                             }
                         }
@@ -189,12 +174,6 @@ void getResponse(Message* query, Message* response) {
                 } 
                 break;
             case NS:
-                /* code */
-                break;
-            case CNAME:
-                /* code */
-                break;
-            case PTR:
                 /* code */
                 break;
             case ALLTYPES:

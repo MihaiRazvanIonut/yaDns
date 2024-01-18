@@ -17,10 +17,7 @@ int main() {
     struct sockaddr_in recursiveResolver;
     int recursiveResolverLength;
     char question[MAX_QUESTION_SIZE];
-    int questionLength = 0;
-    struct QuestionInfo sentQuestionInfo;
-    bzero(&sentQuestionInfo, sizeof(sentQuestionInfo));
-    char answer[MAX_MESSAGE_SIZE];
+    Message answer;
 
     if ((socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("StubResolver> Error: Could not create socket\n");
@@ -31,7 +28,6 @@ int main() {
     recursiveResolver.sin_addr.s_addr = inet_addr(recursiveResolverAdress);
     recursiveResolver.sin_port = htons(recursiveResolverPort);
 
-    // readQuestion(question, &questionLength);
     read(0, question, MAX_QUESTION_SIZE);
 
     recursiveResolverLength = sizeof(recursiveResolver);
@@ -41,11 +37,23 @@ int main() {
         return errno;
     }
 
-    if ((recvfrom(socketDescriptor, answer, MAX_MESSAGE_SIZE, 0, (struct sockaddr*)&recursiveResolver, &recursiveResolverLength)) < 0) {
+    if ((recvfrom(socketDescriptor, &answer, MAX_MESSAGE_SIZE, 0, (struct sockaddr*)&recursiveResolver, &recursiveResolverLength)) < 0) {
         perror("StubResolver> Error: Could not get answer from resolver");
         return errno;
     }
-    printf("%s", answer);
+    printf("Response id: #%d\n", answer.header.id);
+    printf("Header: qr:%d aa: %d tc: %d rd: %d ra: %d Answers: %d\n",
+            answer.header.qr,
+            answer.header.aa,
+            answer.header.tc,
+            answer.header.rd,
+            answer.header.ra,
+            answer.header.anCount       
+    );
+    for (int i = 0; i < answer.header.anCount; ++i) {
+        printf("\n");
+        printResourceRecord(&answer.answersList[i]);
+    }
     return 0;
 }
 

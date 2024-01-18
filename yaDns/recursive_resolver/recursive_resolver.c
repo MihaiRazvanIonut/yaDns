@@ -5,7 +5,6 @@
 #define MAX_WORKERS 8
 #define MAX_QUEUE_ENTRIES 1024
 #define SLIST_SIZE 3
-#define DEBUG
 
 typedef struct NSInfo {
     int port;
@@ -38,19 +37,15 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
     Message responseMessage;
     char recievedQuestionDomainName[MAX_NAME_SIZE];
     QType recievedQuestionQtype = parse_recieved_question(recievedQuestion, recievedQuestionDomainName);
-    printf("%s:%d\n", recievedQuestionDomainName, recievedQuestionQtype);
     int appropiate_port = get_appropiate_port(recievedQuestionDomainName);
-    printf("%d\n", appropiate_port);
     // error handling in case of not recognised domain name
     formatQuestionIntoQuery(recievedQuestionDomainName, recievedQuestionQtype, &queryMessage);
     #ifdef DEBUG
     printf("Resolver> Recieved question...\n");
     #endif
-    printMessage(&queryMessage);
     if (checkCache(&queryMessage) == 0) {
 
     } else {
-        printMessage(&queryMessage);
         int socketDescriptorR_NS;
         struct sockaddr_in foreignServer;
         if ((socketDescriptorR_NS = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -72,10 +67,6 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
         close(socketDescriptorR_NS);
     }
 
-    /**
-     *  todo!()
-     *  Based on the answer either return it to the question sender or open new socket to the appropiate server (recursive search)
-     */
     #ifdef DEBUG
     printf("Resolver> Sending back answer...\n");
     #endif
@@ -89,7 +80,6 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
           printf("Resolver> Answer sent back with succes!\n");  
     }
     #endif
-    // handle queryMessage
 }
 
 void executeResolveQuestion(ResolveQuestion* question) {

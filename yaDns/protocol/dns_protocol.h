@@ -14,6 +14,7 @@
                                 // qType (2 byte integer)   + " " +
                                 // qClass (2 byte integer)  + "\0" 
 #define MAX_ANSWER_SIZE 5
+#define MAX_RRDATA 33
 /**
  *  TTL      - 32 bit signed integer
  *  RDlength - unsigned 16 bit integer
@@ -38,11 +39,10 @@ typedef enum QClass {
 } QClass;
 
 typedef struct ResourceRecord {
-    char domainName[MAX_NAME_SIZE];
     QType rrType;
     QClass rrClass; // Class always set to 1
     int timeToLive;
-    char* rData;
+    char rData[MAX_RRDATA];
     unsigned short int rdLength;
 } ResourceRecord;
 
@@ -73,9 +73,6 @@ typedef struct Message {
 
 
 void printResourceRecord(const ResourceRecord* rr) {
-    printf("Domain Name: %s\n", rr -> domainName);
-    printf("Class: %d\n", rr -> rrClass);
-    printf("Query Type: %d\n", rr -> rrClass);
     printf("Resource Data: %s\n", rr -> rData);
 }
 
