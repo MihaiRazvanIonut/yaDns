@@ -3,9 +3,7 @@
 
 #define MAX_CONFIG_BUFFER 32
 #define MAX_IP_BUFFER_SIZE 16
-#define MAX_QUESTION_SIZE 268   // domain name (255 octets) + " " +
-                                // qType (2 byte integer)   + " " +
-                                // qClass (2 byte integer)  + "\0" 
+
 
 // Recognising recursive resolver 
 void readResolverConfig(char* ipV4, int* port);

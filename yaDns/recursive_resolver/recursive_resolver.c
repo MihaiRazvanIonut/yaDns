@@ -4,8 +4,21 @@
 #define PORT 7710
 #define MAX_WORKERS 8
 #define MAX_QUEUE_ENTRIES 1024
+#define SLIST_SIZE 3
 #define DEBUG
 
+typedef struct NSInfo {
+    int port;
+    char domainName[MAX_NAME_SIZE];
+} NSInfo;
+
+NSInfo sList [SLIST_SIZE];
+void loadNameServerList();
+int get_appropiate_port(char domainName[MAX_NAME_SIZE]);
+QType parse_recieved_question(char question[MAX_QUESTION_SIZE], char domainName[MAX_NAME_SIZE]);
+void formatQuestionIntoQuery(char domainName[MAX_NAME_SIZE], QType QType, Message* query);
+char* strlwr(char* str, int len);
+int checkCache(Message*);
 pthread_mutex_t mutexQuestionsQueue;
 pthread_cond_t condQuestionsQueue;
 pthread_t workers[MAX_WORKERS];
@@ -13,7 +26,7 @@ pthread_t workers[MAX_WORKERS];
 typedef struct ResolveQuestion {
     void (*resolverFunction) (int, char[], struct sockaddr_in);
     int socketDescriptor;
-    char recievedQuestion[MAX_MESSAGE_SIZE];
+    char recievedQuestion[MAX_QUESTION_SIZE];
     struct sockaddr_in questionSender;
 } ResolveQuestion;
 
@@ -21,49 +34,43 @@ ResolveQuestion questionsQueue[MAX_QUEUE_ENTRIES];
 int questionsCount;
 
 void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct sockaddr_in questionSender) {
-    /**
-     *  Message queryMessage;
-     *  Message responseMessage;
-     *  
-     *  bzero(&queryMessage, sizeof(Message));
-     *  bzero(&responseMessage, sizeof(Message));
-     */
-
+    Message queryMessage;
+    Message responseMessage;
+    char recievedQuestionDomainName[MAX_NAME_SIZE];
+    QType recievedQuestionQtype = parse_recieved_question(recievedQuestion, recievedQuestionDomainName);
+    printf("%s:%d\n", recievedQuestionDomainName, recievedQuestionQtype);
+    int appropiate_port = get_appropiate_port(recievedQuestionDomainName);
+    printf("%d\n", appropiate_port);
+    // error handling in case of not recognised domain name
+    formatQuestionIntoQuery(recievedQuestionDomainName, recievedQuestionQtype, &queryMessage);
     #ifdef DEBUG
     printf("Resolver> Recieved question...\n");
     #endif
-    /**
-     *  todo!()
-     *  Format the question into a standard query
-     *  Check cache to see if query was already resolved
-     *  formatQuestionIntoQuery(QuestionInfo* question, Message* query);
-     */
+    printMessage(&queryMessage);
+    if (checkCache(&queryMessage) == 0) {
 
-    // Dummy code to send a querryMessage to a foreign server
-    int socketDescriptorR_NS;
-    struct sockaddr_in foreignServer;
-    if ((socketDescriptorR_NS = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("Resolver> Error: Could not create socket to foreign server\n");
-        exit(1);
+    } else {
+        printMessage(&queryMessage);
+        int socketDescriptorR_NS;
+        struct sockaddr_in foreignServer;
+        if ((socketDescriptorR_NS = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+            perror("Resolver> Error: Could not create socket to foreign server\n");
+            exit(1);
+        }
+        foreignServer.sin_family = AF_INET;
+        foreignServer.sin_addr.s_addr = inet_addr("127.0.0.1");
+        foreignServer.sin_port = htons(appropiate_port);
+        unsigned int lengthForeignServer = sizeof(foreignServer);
+        if (sendto(socketDescriptorR_NS, &queryMessage, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, lengthForeignServer) <= 0) {
+            perror("Resolver> Error: Could not send message to foreign server\n");
+            exit(1);
+        }
+        if ((recvfrom(socketDescriptorR_NS, &responseMessage, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, &lengthForeignServer)) < 0) {
+            perror("Resolver> Error: Could not recieve message from foreign server\n");
+            exit(1);
+        }
+        close(socketDescriptorR_NS);
     }
-    foreignServer.sin_family = AF_INET;
-    foreignServer.sin_addr.s_addr = inet_addr("127.0.0.1");
-    foreignServer.sin_port = htons(7100);
-    unsigned int lengthForeignServer = sizeof(foreignServer);
-    char formatedQuery[MAX_MESSAGE_SIZE];
-    char response[MAX_MESSAGE_SIZE];
-    strcpy(formatedQuery, recievedQuestion);
-    strcat(formatedQuery, ":Seen by Resolver:");
-    if (sendto(socketDescriptorR_NS, formatedQuery, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, lengthForeignServer) <= 0) {
-        perror("Resolver> Error: Could not send message to foreign server\n");
-        exit(1);
-    }
-    if ((recvfrom(socketDescriptorR_NS, response, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, &lengthForeignServer)) < 0) {
-        perror("Resolver> Error: Could not recieve message from foreign server\n");
-        exit(1);
-    }
-    close(socketDescriptorR_NS);
-    // end of dummy code
 
     /**
      *  todo!()
@@ -72,11 +79,8 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
     #ifdef DEBUG
     printf("Resolver> Sending back answer...\n");
     #endif
-    /**
-     * todo!()
-     * Format response from foreign server into a easy to read string
-    */
-    if (sendto(socketDescriptorS_R, response, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &questionSender, sizeof(struct sockaddr)) <= 0) {
+
+    if (sendto(socketDescriptorS_R, &responseMessage, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &questionSender, sizeof(struct sockaddr)) <= 0) {
         perror("Resolver> Error: Could not send answer back to sender\n");
         exit(1);
     }
@@ -85,6 +89,7 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
           printf("Resolver> Answer sent back with succes!\n");  
     }
     #endif
+    // handle queryMessage
 }
 
 void executeResolveQuestion(ResolveQuestion* question) {
@@ -117,9 +122,10 @@ void* startWorker() {
 }
 
 int main() {
+    loadNameServerList();
     struct sockaddr_in resolver;
     struct sockaddr_in stubResolver;
-    char recievedQuestion[MAX_MESSAGE_SIZE];
+    char recievedQuestion[MAX_QUESTION_SIZE];
     int socketDescriptor;
     pthread_mutex_init(&mutexQuestionsQueue, NULL);
     pthread_cond_init(&condQuestionsQueue, NULL);
@@ -152,7 +158,7 @@ int main() {
         unsigned int stubResolverSize = sizeof(stubResolver);
         bzero(&recievedQuestion, sizeof(QuestionInfo));
 
-        if ((recvfrom(socketDescriptor, &recievedQuestion, sizeof(QuestionInfo), 0, (struct sockaddr*) &stubResolver, &stubResolverSize)) <= 0 ) {
+        if ((recvfrom(socketDescriptor, &recievedQuestion, MAX_QUESTION_SIZE, 0, (struct sockaddr*) &stubResolver, &stubResolverSize)) <= 0 ) {
             perror("Resolver> Error: Could not recieve question from stub resolver\n");
             exit(1);
         }
@@ -164,15 +170,78 @@ int main() {
         submitQuestion(questionToBeResolved);
     }
 
-    /**
-     * Cleanup code (to be used :P)
-     * 
-     * for (int i = 0; i < MAX_WORKERS; ++i) {
-     *     pthread_join(workers[i], NULL);
-     * }
-     * pthread_mutex_destroy(&mutexQuestionsQueue);
-     * pthread_cond_destroy(&condQuestionsQueue);
-     * close(socketDescriptor);
-    */
     return 0;
+}
+
+void loadNameServerList() {
+    sList[0].port = 7100;
+    strcpy(sList[0].domainName, "ROOT");
+    sList[1].port = 7101;
+    strcpy(sList[1].domainName, "MRI");
+    sList[2].port = 7102;
+    strcpy(sList[2].domainName, "CY");
+}
+
+int get_appropiate_port(char domainName[MAX_NAME_SIZE]) {
+    for (int i = 0; i < SLIST_SIZE; ++i) {
+        char* nocase_dn = strlwr(sList[i].domainName, strlen(sList[i].domainName) + 1);
+        if (strstr(domainName, nocase_dn)) {
+            free(nocase_dn);
+            return sList[i].port;
+        }
+        free(nocase_dn);
+    }
+    return -1;
+}
+
+char* strlwr(char* str, int len) {
+    char* lower_str = (char*) malloc(len);
+    for (int i = 0; i < len; ++i) {
+        lower_str[i] = tolower(str[i]);
+    }
+    lower_str[len] = '\0';
+    return lower_str;
+}
+
+QType parse_recieved_question(char question[MAX_QUESTION_SIZE], char domainName[MAX_NAME_SIZE]) {
+    char *tokenizer = strtok(question, " ");
+    int index_args = 0;
+    while (tokenizer) {
+        if (index_args == 0) {
+            strcpy(domainName, tokenizer);
+        }
+        if (index_args == 1) {
+            if (strcmp(tokenizer, "a") == 0 || strcmp(tokenizer, "A") == 0) {
+                return A;
+            }
+            if (strcmp(tokenizer, "NS") == 0 || strcmp(tokenizer, "ns") == 0) {
+                return NS;
+            }
+        }
+        index_args++;
+        tokenizer = strtok(NULL, " ");   
+    }
+    return A;
+}
+
+void formatQuestionIntoQuery(char domainName[MAX_NAME_SIZE], QType qType, Message* query) {
+    query -> header.qr = true;
+    query -> header.aa = false;
+    query -> header.tc = false;
+    query -> header.rd = false;
+    query -> header.ra = false;
+    query -> header.rcode = 0;
+    query -> header.qdCount = 1;
+    query -> header.anCount = 0;
+    query -> header.nsCount = 0;
+    query -> header.arCount = 0;
+    strcpy(query -> questionDomain, domainName);
+    query -> questionQType = qType;
+    query -> answersList = NULL;
+    query -> authorityList = NULL;
+    query -> additionalsList = NULL;
+    return query;
+}
+int checkCache(Message*) {
+    return -1;
 }

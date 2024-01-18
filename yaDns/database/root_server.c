@@ -11,21 +11,23 @@ pthread_cond_t condQueriesQueue;
 pthread_t workers[MAX_WORKERS];
 
 typedef struct ComputeQuery {
-    void (*computeQueryFunction) (int, char[], struct sockaddr_in);
+    void (*computeQueryFunction) (int, Message, struct sockaddr_in);
     int socketDescriptor;
-    char recievedQuery[MAX_MESSAGE_SIZE];
+    Message recievedQuery;
     struct sockaddr_in querySender;
 } ComputeQuery;
 
 ComputeQuery querriesQueue[MAX_QUEUE_ENTRIES];
 int querriesCount;
 
-void computeQuery(int socketDescriptorR_NS, char recievedQuery[], struct sockaddr_in querySender) {
+void computeQuery(int socketDescriptorR_NS, Message recievedQuery, struct sockaddr_in querySender) {
+    // search querry
+    
 
     // Dummy code to test functionality
     char response[MAX_MESSAGE_SIZE];
     bzero(&response, MAX_MESSAGE_SIZE);
-    strcpy(response, recievedQuery);
+    strcpy(response, &recievedQuery);
     strcat(response, ":Seen by Root Server:");
     printf("Recieved query %s\n", recievedQuery);
     if (sendto(socketDescriptorR_NS, response, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &querySender, sizeof(struct sockaddr)) < 0) {
@@ -67,7 +69,7 @@ void* startWorker() {
 int main() {
     struct sockaddr_in rootServer;
     struct sockaddr_in requester;
-    char recievedQuery[MAX_MESSAGE_SIZE];
+    Message recievedQuery;
     int socketDescriptor;
 
     pthread_mutex_init(&mutexQueriesQueue, NULL);
@@ -98,7 +100,6 @@ int main() {
 
     for (;;) {
         unsigned int requesterSize = sizeof(requester);
-        bzero(&recievedQuery, MAX_MESSAGE_SIZE);
         if ((recvfrom(socketDescriptor, &recievedQuery, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &requester, &requesterSize)) < 0) {
             perror("Root> Error: Could not recieve query\n");
             exit(1);
@@ -107,7 +108,7 @@ int main() {
         query.computeQueryFunction = &computeQuery;
         memcpy(&(query.querySender), &requester, sizeof(struct sockaddr_in));
         query.socketDescriptor = socketDescriptor;
-        strcpy(query.recievedQuery, recievedQuery);
+        memcpy(&query.recievedQuery, &recievedQuery, MAX_MESSAGE_SIZE);
         submitQuery(query);
     }
 

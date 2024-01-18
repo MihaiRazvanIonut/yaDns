@@ -11,3 +11,11 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <ctype.h>
+#include "protocol/dns_protocol.h"
+
+// for debug purposes
+void printMessage(Message* message) {
+    printf("Domain Name: %s", message -> questionDomain);
+    printf("Question Type: %d", message -> questionQType);
+}

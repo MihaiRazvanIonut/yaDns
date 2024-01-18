@@ -2,10 +2,16 @@
  *  header containing structures used in the DNS protocol as described in RFC1034, RFC1035 
  *
 */
+#ifndef DNS_PROTOCOL_HH
+#define DNS_PROTOCOL_HH
+
 #include <stdbool.h>
-#define MAX_LABEL_SIZE 64    // octets ( 63 chars + '\0')
-#define MAX_NAME_SIZE 256    // octets (255 chars + '\0')
-#define MAX_MESSAGE_SIZE 512 // octets 
+#define MAX_LABEL_SIZE 64       // octets ( 63 chars + '\0')
+#define MAX_NAME_SIZE 256       // octets (255 chars + '\0')
+#define MAX_MESSAGE_SIZE 512    // octets 
+#define MAX_QUESTION_SIZE 268   // domain name (255 octets) + " " +
+                                // qType (2 byte integer)   + " " +
+                                // qClass (2 byte integer)  + "\0" 
 
 /**
  *  TTL      - 32 bit signed integer
@@ -53,7 +59,6 @@ typedef struct MessageHeader {
     bool rd;
     bool ra;
     unsigned short rcode;
-    unsigned short queryInfo;
     unsigned short qdCount;
     unsigned short anCount;
     unsigned short nsCount;
@@ -62,8 +67,11 @@ typedef struct MessageHeader {
 
 typedef struct Message {
     MessageHeader header;
-    char* questionsList;
+    char questionDomain[MAX_NAME_SIZE];
+    QType questionQType;
     ResourceRecord* answersList;
     ResourceRecord* authorityList;
     ResourceRecord* additionalsList;
 } Message;
+
+#endif
