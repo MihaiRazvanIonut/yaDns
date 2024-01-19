@@ -2,9 +2,82 @@
 #include "../protocol/dns_protocol.h"
 
 #define PORT 7710
-#define MAX_WORKERS 8
+#define MAX_WORKERS 4
 #define MAX_QUEUE_ENTRIES 1024
 #define SLIST_SIZE 3
+#define MAX_CACHE_SIZE 10
+#define DEBUG
+pthread_mutex_t mutexCache;
+pthread_t chacheThread;
+ResourceRecordCached cache[MAX_CACHE_SIZE];
+int cacheSize = 0;
+int checkCache(Message* message) {
+    pthread_mutex_lock(&mutexCache);
+    for (int i = 0; i < cacheSize; ++i) {
+        if (strcmp(cache[i].domainName, message->questionDomain) == 0 && cache[i].rr.rrType == message->questionQType) {
+            pthread_mutex_unlock(&mutexCache);
+            return 0;
+        }
+    }
+    pthread_mutex_unlock(&mutexCache);
+    return -1;
+}
+void buildResponseFromCache(Message* response, Message* query) {
+    pthread_mutex_lock(&mutexCache);
+    response -> header.anCount = 0;
+    for (int i = 0; i < cacheSize; ++i) {
+        if (strcmp(cache[i].domainName, query->questionDomain) == 0 && cache[i].rr.rrType == query->questionQType) {
+            printf("I get here: %d, %d\n", query->questionQType, cache[i].rr.rrType);
+            printf("I get here: %s, %s\n", query->questionDomain, cache[i].domainName);
+            response -> header.aa = false;
+            response -> header.id = query -> header.id;
+            response -> header.qr = true;
+            response -> header.rcode = 0;
+            response -> header.ra = false;
+            response -> header.rd = false;
+            response -> header.tc = false;
+            response -> questionQType = query -> questionQType;
+            strcpy(response->questionDomain, query->questionDomain);
+            response -> answersList[response->header.anCount].rrType = response -> questionQType;
+            response -> answersList[response->header.anCount].rrClass = IN;
+            response -> answersList[response->header.anCount].rdLength = cache[i].rr.rdLength;
+            strcpy(response -> answersList[response->header.anCount].rData, cache[i].rr.rData);
+            response -> header.anCount++;
+        }
+    }
+    pthread_mutex_unlock(&mutexCache);
+}
+void cacheResponse(Message* message) {
+    pthread_mutex_lock(&mutexCache);
+    if (cacheSize == MAX_CACHE_SIZE) {
+        cacheSize -= message->header.anCount;
+    } 
+    for (int i = 0; cacheSize < MAX_CACHE_SIZE && i < message -> header.anCount; ++i, ++cacheSize) {
+        strcpy(cache[cacheSize].domainName, message->questionDomain);
+        strcpy(cache[cacheSize].rr.rData, message->answersList[i].rData);
+        cache[cacheSize].rr.rdLength = message->answersList[i].rdLength;
+        cache[cacheSize].rr.rrClass = message->answersList[i].rrClass;
+        cache[cacheSize].rr.rrType = message->answersList[i].rrType;
+        cache[cacheSize].rr.timeToLive = message->answersList[i].timeToLive;
+    }
+    pthread_mutex_unlock(&mutexCache);
+}
+void* cacheMaintenance() {
+    for (;;) {
+        for (int i = 0; i < cacheSize; ++i) {
+            time_t now = time(NULL);
+            if (cache[i].rr.timeToLive < now) {
+                pthread_mutex_lock(&mutexCache);
+                printf("I got here: %ld, %ld\n", cache[i].rr.timeToLive, now);
+                for (int j = i; j < cacheSize - 1; ++j) {
+                    cache[j] = cache[j + 1];
+                }
+                cacheSize--;
+                pthread_mutex_unlock(&mutexCache);
+            }
+        }
+    }
+}
 
 typedef struct NSInfo {
     int port;
@@ -16,8 +89,7 @@ void loadNameServerList();
 int get_appropiate_port(char domainName[MAX_NAME_SIZE]);
 QType parse_recieved_question(char question[MAX_QUESTION_SIZE], char domainName[MAX_NAME_SIZE]);
 void formatQuestionIntoQuery(char domainName[MAX_NAME_SIZE], QType QType, Message* query);
-char* strlwr(char* str, int len);
-int checkCache(Message*);
+void buildNotRecognisedResponse(Message* response, Message* query);
 pthread_mutex_t mutexQuestionsQueue;
 pthread_cond_t condQuestionsQueue;
 pthread_t workers[MAX_WORKERS];
@@ -37,34 +109,42 @@ void resolveQuestion(int socketDescriptorS_R, char recievedQuestion[], struct so
     Message responseMessage;
     char recievedQuestionDomainName[MAX_NAME_SIZE];
     QType recievedQuestionQtype = parse_recieved_question(recievedQuestion, recievedQuestionDomainName);
-    int appropiate_port = get_appropiate_port(recievedQuestionDomainName);
-    // error handling in case of not recognised domain name
     formatQuestionIntoQuery(recievedQuestionDomainName, recievedQuestionQtype, &queryMessage);
-    #ifdef DEBUG
-    printf("Resolver> Recieved question...\n");
-    #endif
-    if (checkCache(&queryMessage) == 0) {
-
+    int appropiate_port = get_appropiate_port(recievedQuestionDomainName);
+    if (appropiate_port == -1) {
+        buildNotRecognisedResponse(&responseMessage, &queryMessage);
     } else {
-        int socketDescriptorR_NS;
-        struct sockaddr_in foreignServer;
-        if ((socketDescriptorR_NS = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-            perror("Resolver> Error: Could not create socket to foreign server\n");
-            exit(1);
+        #ifdef DEBUG
+        printf("Resolver> Recieved question...\n");
+        #endif
+        if (checkCache(&queryMessage) == 0) {
+            printf("Resolver> Found query in cache rederecting answer to stub...\n");
+            buildResponseFromCache(&responseMessage, &queryMessage);
+        } else {
+            printf("Resolver> Could not find query in cache, sending querry to an appropiate name server...\n");
+            int socketDescriptorR_NS;
+            struct sockaddr_in foreignServer;
+            if ((socketDescriptorR_NS = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+                perror("Resolver> Error: Could not create socket to foreign server\n");
+                exit(1);
+            }
+            foreignServer.sin_family = AF_INET;
+            foreignServer.sin_addr.s_addr = inet_addr("127.0.0.1");
+            foreignServer.sin_port = htons(appropiate_port);
+            unsigned int lengthForeignServer = sizeof(foreignServer);
+            if (sendto(socketDescriptorR_NS, &queryMessage, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, lengthForeignServer) <= 0) {
+                perror("Resolver> Error: Could not send message to foreign server\n");
+                exit(1);
+            }
+            if ((recvfrom(socketDescriptorR_NS, &responseMessage, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, &lengthForeignServer)) < 0) {
+                perror("Resolver> Error: Could not recieve message from foreign server\n");
+                exit(1);
+            }
+            if (responseMessage.header.rcode == 0) {
+                cacheResponse(&responseMessage);
+            }
+            close(socketDescriptorR_NS);
         }
-        foreignServer.sin_family = AF_INET;
-        foreignServer.sin_addr.s_addr = inet_addr("127.0.0.1");
-        foreignServer.sin_port = htons(appropiate_port);
-        unsigned int lengthForeignServer = sizeof(foreignServer);
-        if (sendto(socketDescriptorR_NS, &queryMessage, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, lengthForeignServer) <= 0) {
-            perror("Resolver> Error: Could not send message to foreign server\n");
-            exit(1);
-        }
-        if ((recvfrom(socketDescriptorR_NS, &responseMessage, MAX_MESSAGE_SIZE, 0, (struct sockaddr*) &foreignServer, &lengthForeignServer)) < 0) {
-            perror("Resolver> Error: Could not recieve message from foreign server\n");
-            exit(1);
-        }
-        close(socketDescriptorR_NS);
     }
 
     #ifdef DEBUG
@@ -121,14 +201,17 @@ int main() {
     int socketDescriptor;
     pthread_mutex_init(&mutexQuestionsQueue, NULL);
     pthread_cond_init(&condQuestionsQueue, NULL);
-
+    pthread_mutex_init(&mutexCache, NULL);
     for (int i = 0; i < MAX_WORKERS; ++i) {
         if (pthread_create(&workers[i], NULL, &startWorker, NULL) < 0) {
             perror("Resolver> Error: Could not create workers\n");
             exit(1);
         }
     }
-
+    if (pthread_create(&chacheThread, NULL, &cacheMaintenance, NULL) < 0) {
+        perror("Resolver> Error: Could not create cache thread\n");
+        exit(1);
+    }
     if ((socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("Resolver> Error: Could not create socket\n");
         exit(1);
@@ -198,17 +281,23 @@ QType parse_recieved_question(char question[MAX_QUESTION_SIZE], char domainName[
             strcpy(domainName, tokenizer);
         }
         if (index_args == 1) {
+            printf("%s", tokenizer);
             if (strcmp(tokenizer, "a") == 0 || strcmp(tokenizer, "A") == 0) {
                 return A;
             }
             if (strcmp(tokenizer, "NS") == 0 || strcmp(tokenizer, "ns") == 0) {
                 return NS;
             }
+            if (strcmp(tokenizer, "CNAME") == 0 || strcmp(tokenizer, "cname") == 0) {
+                return CNAME;
+            }
         }
         index_args++;
         tokenizer = strtok(NULL, " ");   
     }
-    return A;
+    if (index_args == 1) {
+        return A;
+    }
 }
 
 void formatQuestionIntoQuery(char domainName[MAX_NAME_SIZE], QType qType, Message* query) {
@@ -223,6 +312,16 @@ void formatQuestionIntoQuery(char domainName[MAX_NAME_SIZE], QType qType, Messag
     strcpy(query -> questionDomain, domainName);
     query -> questionQType = qType;
 }
-int checkCache(Message*) {
-    return -1;
+
+void buildNotRecognisedResponse(Message* response, Message* query) {
+    response -> header.aa = false;
+    response -> header.id = query -> header.id;
+    response -> header.qr = true;
+    response -> header.anCount = 0;
+    response -> header.ra = false;
+    response -> header.rcode = 1;
+    response -> header.rd = false;
+    response -> header.tc = false;
+    strcpy(response -> questionDomain, query -> questionDomain);
+    response -> questionQType = query -> questionQType;
 }

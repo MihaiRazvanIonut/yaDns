@@ -7,6 +7,7 @@
 #define DEBUG
 #define MASTER_FILE_PATH "mri_tdl_mf"
 #define MAX_BUFFER_SIZE 2048
+#define TTL 30
 
 void getResponse(Message* query, Message* response);
 
@@ -166,6 +167,7 @@ void getResponse(Message* query, Message* response) {
                                 response -> answersList[indexAnswerList].rrClass = IN;
                                 response -> answersList[indexAnswerList].rrType = A;
                                 response -> answersList[indexAnswerList].rdLength = lenData;
+                                response -> answersList[indexAnswerList].timeToLive = TTL + time(NULL);
                                 strcpy(response -> answersList[indexAnswerList].rData, data);
                                 response -> header.anCount++;
                             }
@@ -190,7 +192,8 @@ void getResponse(Message* query, Message* response) {
                         strcpy(response -> answersList[response -> header.anCount].rData, domainName);
                         response -> answersList[response -> header.anCount].rdLength = strlen(domainName);
                         response -> answersList[response -> header.anCount].rrClass = IN;
-                        response -> answersList[response -> header.anCount].rrType = IN;
+                        response -> answersList[response -> header.anCount].rrType = NS;
+                        response -> answersList[response -> header.anCount].timeToLive = TTL + time(NULL);
                         response -> header.anCount++;
                     }
                 }

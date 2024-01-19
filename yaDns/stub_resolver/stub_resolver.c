@@ -51,11 +51,12 @@ int main() {
             answer.header.rcode,
             answer.header.anCount       
     );
+    printf("Query for domain name: %s", answer.questionDomain);
     for (int i = 0; i < answer.header.anCount; ++i) {
         printf("\n");
         printResourceRecord(&answer.answersList[i]);
     }
-    printf("Response status based on rcode: \n");
+    printf("Response status based on rcode: ");
     switch (answer.header.rcode)
     {
     case 0: printf("# No error\n"); break;

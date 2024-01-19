@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <time.h>
 #define MAX_LABEL_SIZE 64       // octets ( 63 chars + '\0')
 #define MAX_NAME_SIZE 256       // octets (255 chars + '\0')
 #define MAX_MESSAGE_SIZE 512    // octets 
@@ -41,7 +42,7 @@ typedef enum QClass {
 typedef struct ResourceRecord {
     QType rrType;
     QClass rrClass; // Class always set to 1
-    int timeToLive;
+    time_t timeToLive;
     char rData[MAX_RRDATA];
     unsigned short int rdLength;
 } ResourceRecord;
@@ -75,5 +76,10 @@ typedef struct Message {
 void printResourceRecord(const ResourceRecord* rr) {
     printf("Resource Data: %s\n", rr -> rData);
 }
+
+typedef struct ResourceRecordCached {
+    ResourceRecord rr;
+    char domainName[MAX_NAME_SIZE];
+} ResourceRecordCached;
 
 #endif
