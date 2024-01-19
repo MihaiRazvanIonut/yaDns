@@ -174,14 +174,40 @@ void getResponse(Message* query, Message* response) {
                 } 
                 break;
             case NS:
-                /* code */
+                if (bufferLines[0] == 'N' && bufferLines[1] == 'S' && bufferLines[2] == ' ') {
+                    int index = 2;
+                    for (; bufferLines[index] == ' '; ++index);
+                    char domainName[MAX_MESSAGE_SIZE];
+                    int domainNameLen = 0;
+                    for (; bufferLines[index] != '\0'; ++index) {
+                        domainName[domainNameLen++] = bufferLines[index];
+                    }
+                    domainName[domainNameLen] = '\0';
+                    strcpy(response -> questionDomain, query -> questionDomain);
+                    if (response -> header.anCount > MAX_ANSWER_SIZE) {
+                        response -> header.tc = true;
+                    } else {
+                        strcpy(response -> answersList[response -> header.anCount].rData, domainName);
+                        response -> answersList[response -> header.anCount].rdLength = strlen(domainName);
+                        response -> answersList[response -> header.anCount].rrClass = IN;
+                        response -> answersList[response -> header.anCount].rrType = IN;
+                        response -> header.anCount++;
+                    }
+                }
                 break;
-            case ALLTYPES:
-                /* code */
+            case CNAME:
+                response -> header.rcode = 4;
                 break;
             default:
                 break;
         }
     bufferLines = strtok(NULL, "\n");
+    }
+    if (response -> header.rcode != 4) {
+        if (response -> header.anCount == 0) {
+            response -> header.rcode = 3;
+        } else {
+            response -> header.rcode = 0;
+        }
     }
 }

@@ -42,17 +42,28 @@ int main() {
         return errno;
     }
     printf("Response id: #%d\n", answer.header.id);
-    printf("Header: qr:%d aa: %d tc: %d rd: %d ra: %d Answers: %d\n",
+    printf("Header: qr:%d aa: %d tc: %d rd: %d ra: %d rcode: %d Answers: %d\n",
             answer.header.qr,
             answer.header.aa,
             answer.header.tc,
             answer.header.rd,
             answer.header.ra,
+            answer.header.rcode,
             answer.header.anCount       
     );
     for (int i = 0; i < answer.header.anCount; ++i) {
         printf("\n");
         printResourceRecord(&answer.answersList[i]);
+    }
+    printf("Response status based on rcode: \n");
+    switch (answer.header.rcode)
+    {
+    case 0: printf("# No error\n"); break;
+    case 1: printf("# Resolver could not interpret query\n"); break;
+    case 3: printf("# Name error\n"); break;
+    case 4: printf("# Not implemented\n"); break;
+    default:
+        break;
     }
     return 0;
 }

@@ -1,11 +1,11 @@
 #include "../tools.h"
 #include "../protocol/dns_protocol.h"
 
-#define PORT 7101
+#define PORT 7102
 #define MAX_WORKERS 8
 #define MAX_QUEUE_ENTRIES 1024
 #define DEBUG
-#define MASTER_FILE_PATH "mri_tdl_mf"
+#define MASTER_FILE_PATH "cy_tdl_mf"
 #define MAX_BUFFER_SIZE 2048
 
 void getResponse(Message* query, Message* response);
